@@ -11,6 +11,13 @@ export class VoiceService {
   private readonly logger = new Logger(VoiceService.name);
   private hfToken: string;
 
+  // O'zbek modellari ro'yxati — birinchisi ishlamasa keyingisini sinaydi
+  private readonly models = [
+    'islomov/navaistt_v2_medium',
+    'islomov/navaistt_v1_medium',
+    'oyqiz/uzbek_stt',
+  ];
+
   constructor(private configService: ConfigService) {
     this.hfToken = this.configService.get('HF_TOKEN');
   }
@@ -34,6 +41,32 @@ export class VoiceService {
     );
   }
 
+  private async tryModel(model: string, audioBuffer: Buffer): Promise<string | null> {
+    try {
+      const response = await axios.post(
+        `https://api-inference.huggingface.co/models/${model}`,
+        audioBuffer,
+        {
+          headers: {
+            'Authorization': `Bearer ${this.hfToken}`,
+            'Content-Type': 'audio/wav',
+          },
+          maxBodyLength: Infinity,
+          timeout: 120000,
+        }
+      );
+      const text = response.data.text || response.data[0]?.text;
+      if (text) {
+        this.logger.log(`✅ Model "${model}" ishladi: ${text}`);
+        return text;
+      }
+      return null;
+    } catch (err: any) {
+      this.logger.warn(`❌ Model "${model}" xato: ${err.response?.status} ${err.message}`);
+      return null;
+    }
+  }
+
   async transcribe(fileUrl: string): Promise<string> {
     const tempDir = path.join(process.cwd(), 'temp');
     if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
@@ -49,24 +82,16 @@ export class VoiceService {
       this.logger.log('🔄 WAV ga aylantirilmoqda...');
       this.convertToWav(oggPath, wavPath);
 
-      this.logger.log('🤖 Hugging Face (uzbek model) ishlamoqda...');
       const audioBuffer = fs.readFileSync(wavPath);
 
-      const response = await axios.post(
-        'https://api-inference.huggingface.co/models/sarahai/uzbek-stt-3',
-        audioBuffer,
-        {
-          headers: {
-            'Authorization': `Bearer ${this.hfToken}`,
-            'Content-Type': 'audio/wav',
-          },
-          maxBodyLength: Infinity,
-          timeout: 120000,
-        }
-      );
+      this.logger.log('🤖 Modellarni sinab ko\'rish...');
+      for (const model of this.models) {
+        this.logger.log(`Sinash: ${model}`);
+        const text = await this.tryModel(model, audioBuffer);
+        if (text) return text;
+      }
 
-      this.logger.log('Response: ' + JSON.stringify(response.data));
-      return response.data.text || response.data[0]?.text || JSON.stringify(response.data);
+      throw new Error('Hech qaysi model ishlamadi');
     } finally {
       if (fs.existsSync(oggPath)) fs.unlinkSync(oggPath);
       if (fs.existsSync(wavPath)) fs.unlinkSync(wavPath);
