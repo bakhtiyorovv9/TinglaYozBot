@@ -61,6 +61,7 @@ export class VoiceService {
         model: 'whisper-large-v3',
         language: 'uz',
         response_format: 'text',
+        prompt: "O'zbek tilida so'zlashuv. Lotin yozuvida.",
       });
 
       return result as unknown as string;
