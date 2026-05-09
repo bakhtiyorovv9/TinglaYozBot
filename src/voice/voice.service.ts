@@ -58,10 +58,9 @@ export class VoiceService {
       this.logger.log('🤖 Groq Whisper ishlamoqda...');
       const result = await this.groq.audio.transcriptions.create({
         file: fs.createReadStream(mp3Path),
-        model: 'whisper-large-v3',
-        language: 'uz',
+        model: 'whisper-large-v3-turbo', // ← yangi model
         response_format: 'text',
-        prompt: "O'zbek tilida so'zlashuv. Lotin yozuvida.",
+        prompt: "Salom, bu o'zbek tilida gapirilgan audio.",
       });
 
       return result as unknown as string;
